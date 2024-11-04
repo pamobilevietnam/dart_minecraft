@@ -11,14 +11,33 @@ class NbtReader extends ByteReader<bool> {
   NbtCompression nbtCompression = NbtCompression.none;
 
   NbtCompound? root;
+  dynamic isBedrockHeader = false;
 
   NbtReader(Uint8List list) {
     data = list;
+
+
     nbtCompression = _detectCompression();
     if (nbtCompression != NbtCompression.none) {
       data = nbtCompression.decompressData(data!);
     }
+    isBedrockHeader = getBedrockHeader(data!);
+    if(isBedrockHeader != null){
+      readPosition = 8;
+    }
     readByteData = data!.buffer.asByteData();
+  }
+
+  int? getBedrockHeader(Uint8List array) {
+    final head = array.sublist(0, 8);
+    final ByteData view = ByteData.sublistView(head);
+    final int version = view.getUint32(0, Endian.little);
+    final int length = view.getUint32(4, Endian.little);
+
+    if (head.length == 8 && version > 0 && version < 100 && length == array.lengthInBytes - 8) {
+      return version;
+    }
+    return null;
   }
 
   /// Reads the file at [path] in bytes and constructs a new reader
@@ -31,6 +50,7 @@ class NbtReader extends ByteReader<bool> {
   /// Reads the NBT data from the byte list.
   /// Throws [NbtFileReadException] if an issue occured.
   NbtCompound read() {
+
     try {
       root = NbtTag.readNewTag(this, null, withName: true) as NbtCompound;
     } on Exception catch (e) {
